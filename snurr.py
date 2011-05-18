@@ -11,15 +11,17 @@ class SnurrBot(irc.IRCClient):
     def signedOn(self):
         self.join(self.factory.channel)
         print "Signed on as %s." % (self.nickname,)
+        self.factory.bots.append(self)
 
     def joined(self, channel):
         print "Joined %s." % (channel,)
 
     def privmsg(self, user, channel, msg):
-        print "PRIVMSG: %s" (msg,)
+        print "PRIVMSG: %s" % (msg,)
     
     def msgToChannel(self, msg):
-        self.msg(self.factory.channel, msg)
+        self.say(self.factory.channel, msg)
+
 
 class SnurrBotFactory(protocol.ClientFactory):
     protocol = SnurrBot
@@ -27,6 +29,7 @@ class SnurrBotFactory(protocol.ClientFactory):
     def __init__(self, channel, nickname='snurr'):
         self.channel = channel
         self.nickname = nickname
+        self.bots = []
 
     def clientConnectionLost(self, connector, reason):
         print "Lost connection (%s), reconnecting." % (reason,)
@@ -37,8 +40,8 @@ class SnurrBotFactory(protocol.ClientFactory):
 
 class MediaWikiProtocol(protocol.DatagramProtocol):
 
-    def __init__(self, ircbot):
-        self.ircbot = ircbot
+    def __init__(self, botfactory):
+        self.botfactory = botfactory
 
     def startProtocol(self):
         print "Listening for Recent Changes from MediaWiki"
@@ -46,17 +49,21 @@ class MediaWikiProtocol(protocol.DatagramProtocol):
     def stopProtocol(self):
         print "MediWiki listener stopped"
 
-    def datagramRecieved(self, data, (host, port)):
+    def datagramReceived(self, data, (host, port)):
         print "received %r from %s:%d" % (data, host, port)
         print "relaying to ircbot %s" % (self.ircbot,)
-        self.ircbot.msgToChannel(data)
+        print self.ircbot.protocol
+        self..msgToChannel(, data) #TODO: You are here
+        botfactory
         print self,data,host,port
+
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
         chan = sys.argv[1]
+
         snurr = SnurrBotFactory('#' + chan)
-        wiki = MediaWikiProtocol(snurr)
+        wiki = MediaWikiProtocol()
 
 		# Start the MediaWiki listener.
         reactor.listenUDP(41894, wiki)
