@@ -16,7 +16,10 @@ class SnurrBot(irc.IRCClient):
         print "Joined %s." % (channel,)
 
     def privmsg(self, user, channel, msg):
-        print msg
+        print "PRIVMSG: %s" (msg,)
+    
+    def msgToChannel(self, msg):
+        self.msg(self.factory.channel, msg)
 
 class SnurrBotFactory(protocol.ClientFactory):
     protocol = SnurrBot
@@ -33,22 +36,34 @@ class SnurrBotFactory(protocol.ClientFactory):
         print "Could not connect: %s" % (reason,)
 
 class MediaWikiProtocol(protocol.DatagramProtocol):
+
+    def __init__(self, ircbot):
+        self.ircbot = ircbot
+
     def startProtocol(self):
-        print "Listening for wikiChanges"
-        reactor.connectTCP('irc.ifi.uio.no', 6667, SnurrBotFactory('#' + chan))
+        print "Listening for Recent Changes from MediaWiki"
 
     def stopProtocol(self):
         print "MediWiki listener stopped"
 
     def datagramRecieved(self, data, (host, port)):
         print "received %r from %s:%d" % (data, host, port)
-        self.transport.write(data, (host, port))
+        print "relaying to ircbot %s" % (self.ircbot,)
+        self.ircbot.msgToChannel(data)
         print self,data,host,port
 
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
+    if len(sys.argv) == 2:
         chan = sys.argv[1]
-        reactor.listenUDP(4321, MediaWikiProtocol())
+        snurr = SnurrBotFactory('#' + chan)
+        wiki = MediaWikiProtocol(snurr)
+
+		# Start the MediaWiki listener.
+        reactor.listenUDP(41894, wiki)
+
+		# Start IRC-bot.
+        reactor.connectTCP('irc.ifi.uio.no', 6667, snurr)
+
         reactor.run()
     else:
         print "Usage: %s IRC_CHANNEL" % (sys.argv[0],)
