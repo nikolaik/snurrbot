@@ -4,14 +4,18 @@ from twisted.internet import protocol, reactor
 
 
 class SnurrBot(irc.IRCClient):
+
     def _get_nickname(self):
         return self.factory.nickname
     nickname = property(_get_nickname)
 
+    def __unicode__(self):
+        return "SnurrBot:%s" % (nickname,)
+
     def signedOn(self):
         self.join(self.factory.channel)
         print "Signed on as %s." % (self.nickname,)
-        self.factory.bots.append(self)
+        self.factory.bot = self
 
     def joined(self, channel):
         print "Joined %s." % (channel,)
@@ -20,7 +24,8 @@ class SnurrBot(irc.IRCClient):
         print "PRIVMSG: %s" % (msg,)
     
     def msgToChannel(self, msg):
-        self.say(self.factory.channel, msg)
+        print "PRIVMSG %s: '%s'" % (self.factory.channel, msg,)
+        self.say(self.factory.channel, msg, length=512)
 
 
 class SnurrBotFactory(protocol.ClientFactory):
@@ -29,7 +34,9 @@ class SnurrBotFactory(protocol.ClientFactory):
     def __init__(self, channel, nickname='snurr'):
         self.channel = channel
         self.nickname = nickname
-        self.bots = []
+
+    def __unicode__(self):
+        return "SnurrBotFactory"
 
     def clientConnectionLost(self, connector, reason):
         print "Lost connection (%s), reconnecting." % (reason,)
@@ -51,26 +58,24 @@ class MediaWikiProtocol(protocol.DatagramProtocol):
 
     def datagramReceived(self, data, (host, port)):
         print "received %r from %s:%d" % (data, host, port)
-        print "relaying to ircbot %s" % (self.ircbot,)
-        print self.ircbot.protocol
-        self..msgToChannel(, data) #TODO: You are here
-        botfactory
-        print self,data,host,port
-
+        print "Relaying msg IRCClient in %s" % (self.botfactory,)
+        if self.botfactory.bot:
+            self.botfactory.bot.msgToChannel("EDBWiki: " + data)
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
+    if len(sys.argv) == 3:
         chan = sys.argv[1]
+        wiki_port = int(sys.argv[2])
 
         snurr = SnurrBotFactory('#' + chan)
-        wiki = MediaWikiProtocol()
+        wiki = MediaWikiProtocol(snurr)
 
 		# Start the MediaWiki listener.
-        reactor.listenUDP(41894, wiki)
+        reactor.listenUDP(wiki_port, wiki)
 
 		# Start IRC-bot.
         reactor.connectTCP('irc.ifi.uio.no', 6667, snurr)
 
         reactor.run()
     else:
-        print "Usage: %s IRC_CHANNEL" % (sys.argv[0],)
+        print "Usage: %s [IRC_CHANNEL] [MEDIAWIKI_PORT]" % (sys.argv[0],)
