@@ -2,7 +2,6 @@ import sys
 from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor
 
-
 class SnurrBot(irc.IRCClient):
 
     def _get_nickname(self):
@@ -15,16 +14,19 @@ class SnurrBot(irc.IRCClient):
     def signedOn(self):
         self.join(self.factory.channel)
         print "Signed on as %s." % (self.nickname,)
+        # make the client instance known to the factory
         self.factory.bot = self
 
     def joined(self, channel):
         print "Joined %s." % (channel,)
 
     def privmsg(self, user, channel, msg):
+        # Do nothing with PRIVMSG's
         print "PRIVMSG: %s" % (msg,)
     
     def msgToChannel(self, msg):
-        print "PRIVMSG %s: '%s'" % (self.factory.channel, msg,)
+        # Sends a message to the predefined channel
+        print "Message sent to %s" % (self.factory.channel,)
         self.say(self.factory.channel, msg, length=512)
 
 
@@ -57,8 +59,10 @@ class MediaWikiProtocol(protocol.DatagramProtocol):
         print "MediWiki listener stopped"
 
     def datagramReceived(self, data, (host, port)):
-        print "received %r from %s:%d" % (data, host, port)
-        print "Relaying msg IRCClient in %s" % (self.botfactory,)
+        # UDP messages from MediaWiki arrive here and are relayed
+        # to the ircbot created by the bot factory.
+        print "Received %r from %s:%d" % (data, host, port)
+        print "Relaying msg to IRCClient in %s" % (self.botfactory,)
         if self.botfactory.bot:
             self.botfactory.bot.msgToChannel("EDBWiki: " + data)
 
@@ -70,12 +74,12 @@ if __name__ == "__main__":
         snurr = SnurrBotFactory('#' + chan)
         wiki = MediaWikiProtocol(snurr)
 
-		# Start the MediaWiki listener.
+        # Start the MediaWiki listener.
         reactor.listenUDP(wiki_port, wiki)
 
-		# Start IRC-bot.
+        # Start IRC-bot on IRCNet.
         reactor.connectTCP('irc.ifi.uio.no', 6667, snurr)
 
         reactor.run()
     else:
-        print "Usage: %s [IRC_CHANNEL] [MEDIAWIKI_PORT]" % (sys.argv[0],)
+        print "Usage: python %s <IRC_CHANNEL> <MEDIAWIKI_PORT>" % (sys.argv[0],)
