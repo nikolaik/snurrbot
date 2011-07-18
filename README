@@ -1,1 +1,1 @@
-Usage: python snurr.py <IRC_CHANNEL> <MEDIAWIKI_PORT>
+Usage: python snurr.py <IRC_SERVER> <IRC_CHANNEL> <MEDIAWIKI_PORT>
