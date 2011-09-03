@@ -1,4 +1,4 @@
-import argparse
+import optparse
 from datetime import datetime
 from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor, ssl
@@ -74,28 +74,31 @@ def log(message):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Pipes UDP-messages to an IRC-channel.')
-    parser.add_argument('-s', '--ssl', action='store_true',
-                        help='connect with SSL')
-    parser.add_argument('server', metavar='SERVER',
-                        help='IRC server')
-    parser.add_argument('port', metavar='PORT', type=int,
-                        help='IRC server port')
-    parser.add_argument('channel', metavar='CHANNEL',
-                        help='IRC channel (without the \'#\')')
-    parser.add_argument('listen_port', metavar='LISTEN_PORT', type=int,
-                        help='UDP listener port')
-    args = parser.parse_args()
-    
-    snurr = SnurrBotFactory('#' + args.channel)
+    usage = 'Usage: python snurr.py [options] CHANNEL'
+    parser = optparse.OptionParser(description='Pipes UDP-messages to an IRC-channel.',
+                                   usage=usage)
+    parser.add_option('-c', '--connect', metavar='SERVER',
+                      help='IRC server (default: irc.ifi.uio.no)', default='irc.ifi.uio.no')
+    parser.add_option('-p', '--port', metavar='PORT', type=int,
+                      help='IRC server port (default: 6667)', default=6667)
+    parser.add_option('-s','--ssl', action='store_true',
+                      help='connect with SSL (default: False)', default=False)
+    parser.add_option('-l', '--listen_port', metavar='LISTEN_PORT', type=int,
+                      help='UDP listen port (default: 55666)', default=55666)
+    options, args = parser.parse_args()
+
+    if len(args) != 1:
+        print usage
+        exit()
+    snurr = SnurrBotFactory('#' + args[0])
     listener = UDPListener(snurr)
 
     # Start the listener.
-    reactor.listenUDP(args.listen_port, listener)
+    reactor.listenUDP(options.listen_port, listener)
 
     # Start IRC-bot on specified server and port.
-    if args.ssl:
-        reactor.connectSSL(args.server, args.port, snurr, ssl.ClientContextFactory())
+    if options.ssl:
+        reactor.connectSSL(options.connect, options.port, snurr, ssl.ClientContextFactory())
     else:
-        reactor.connectTCP(args.server, args.port, snurr)
+        reactor.connectTCP(otions.connect, options.port, snurr)
     reactor.run()

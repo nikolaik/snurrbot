@@ -1,16 +1,16 @@
 Requirements: python-twisted
 
 $ python snurr.py -h
-usage: snurr.py [-h] [-s] SERVER PORT CHANNEL LISTEN_PORT
+Usage: python snurr.py [options] CHANNEL
 
 Pipes UDP-messages to an IRC-channel.
 
-positional arguments:
-  SERVER       IRC server
-  PORT         IRC server port
-  CHANNEL      IRC channel (without the '#')
-  LISTEN_PORT  UDP listener port
+Options:
+  -h, --help            show this help message and exit
+  -c SERVER, --connect=SERVER
+                        IRC server (default: irc.ifi.uio.no)
+  -p PORT, --port=PORT  IRC server port (default: 6667)
+  -s, --ssl             connect with SSL (default: False)
+  -l LISTEN_PORT, --listen_port=LISTEN_PORT
+                        UDP listen port (default: 55666)
 
-optional arguments:
-  -h, --help   show this help message and exit
-  -s, --ssl    connect with SSL
