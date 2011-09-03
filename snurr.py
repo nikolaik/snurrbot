@@ -100,5 +100,5 @@ if __name__ == "__main__":
     if options.ssl:
         reactor.connectSSL(options.connect, options.port, snurr, ssl.ClientContextFactory())
     else:
-        reactor.connectTCP(otions.connect, options.port, snurr)
+        reactor.connectTCP(options.connect, options.port, snurr)
     reactor.run()
