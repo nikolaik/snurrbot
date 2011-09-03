@@ -1,1 +1,16 @@
-Usage: python snurr.py <IRC_SERVER> <IRC_CHANNEL> <MEDIAWIKI_PORT>
+Requirements: python-twisted
+
+$ python snurr.py -h
+usage: snurr.py [-h] [-s] SERVER PORT CHANNEL LISTEN_PORT
+
+Pipes UDP-messages to an IRC-channel.
+
+positional arguments:
+  SERVER       IRC server
+  PORT         IRC server port
+  CHANNEL      IRC channel (without the '#')
+  LISTEN_PORT  UDP listener port
+
+optional arguments:
+  -h, --help   show this help message and exit
+  -s, --ssl    connect with SSL

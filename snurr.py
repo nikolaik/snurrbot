@@ -1,7 +1,7 @@
-import sys
-from twisted.words.protocols import irc
-from twisted.internet import protocol, reactor
+import argparse
 from datetime import datetime
+from twisted.words.protocols import irc
+from twisted.internet import protocol, reactor, ssl
 
 class SnurrBot(irc.IRCClient):
 
@@ -47,7 +47,7 @@ class SnurrBotFactory(protocol.ClientFactory):
         connector.connect()
 
     def clientConnectionFailed(self, connector, reason):
-        log("Could not connect: %s" % (reason,))
+        log("Could not connect: (%s), retrying." % (reason,))
 
 class UDPListener(protocol.DatagramProtocol):
 
@@ -74,19 +74,28 @@ def log(message):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 4:
-        chan = sys.argv[2]
-        listen_port = int(sys.argv[3])
+    parser = argparse.ArgumentParser(description='Pipes UDP-messages to an IRC-channel.')
+    parser.add_argument('-s', '--ssl', action='store_true',
+                        help='connect with SSL')
+    parser.add_argument('server', metavar='SERVER',
+                        help='IRC server')
+    parser.add_argument('port', metavar='PORT', type=int,
+                        help='IRC server port')
+    parser.add_argument('channel', metavar='CHANNEL',
+                        help='IRC channel (without the \'#\')')
+    parser.add_argument('listen_port', metavar='LISTEN_PORT', type=int,
+                        help='UDP listener port')
+    args = parser.parse_args()
+    
+    snurr = SnurrBotFactory('#' + args.channel)
+    listener = UDPListener(snurr)
 
-        snurr = SnurrBotFactory('#' + chan)
-        listener = UDPListener(snurr)
+    # Start the listener.
+    reactor.listenUDP(args.listen_port, listener)
 
-        # Start the listener.
-        reactor.listenUDP(listen_port, listener)
-
-        # Start IRC-bot on IRCNet.
-        reactor.connectTCP(sys.argv[1], 6667, snurr)
-
-        reactor.run()
+    # Start IRC-bot on specified server and port.
+    if args.ssl:
+        reactor.connectSSL(args.server, args.port, snurr, ssl.ClientContextFactory())
     else:
-        print "Usage: python %s <IRC_SERVER> <IRC_CHANNEL> <UDP_PORT>" % (sys.argv[0],)
+        reactor.connectTCP(args.server, args.port, snurr)
+    reactor.run()
