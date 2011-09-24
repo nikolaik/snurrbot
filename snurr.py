@@ -9,6 +9,8 @@ from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor, ssl
 from twisted.enterprise import adbapi
 
+import settings
+
 class SnurrBot(irc.IRCClient):
     def __init__(self):
         self.actions = IRCActions(self)
@@ -86,10 +88,10 @@ class IRCActions():
 
     def _get_dbpool(self):
         # Setup an async db connection
-        # CONFIG:
-        return adbapi.ConnectionPool("MySQLdb",
-            host="snes.neuf.no", user="driftlogg",
-            passwd="", db="driftlogg")
+        return adbapi.ConnectionPool(settings.DB_API_ADAPTER,
+            host=settings.DB_HOST, user=settings.DB_USER,
+            passwd=settings.DB_PASSWORD, db=settings.DB_NAME,
+            charset = "utf8", use_unicode = True)
 
     def ping(self, host):
         # TODO rewrite async
@@ -101,7 +103,6 @@ class IRCActions():
             elif retcode == 2:
                 return host + " pinger ikke :("
             else:
-               print retcode
                return "ping returned: " + str(retcode)
         except OSError, e:
             log("Execution failed:" + str(e))
@@ -114,7 +115,7 @@ class IRCActions():
         text += "Command: !log DESCRIPTION\n"
         text += "   Add new entry in log\n"
         text += "Command: !lastlog\n"
-        text += "   Last log entry\n"
+        text += "   Last 3 log entries\n"
         text += "Command: !ping HOST\n"
         text += "   Ping target host"
         return text
@@ -140,26 +141,21 @@ class IRCActions():
 
     def set_log_entry(self, nick, entry):
         entry = " ".join(entry)
-        sql = """INSERT INTO driftslogg (time, user, log) 
-                 VALUES(NOW(), %s, %s)""", (nick, entry)
-        return self.dbpool.runQuery(sql)
+        sql = "INSERT INTO main_entry (user, text, created) VALUES (%s, %s, NOW())"
+        params = (nick, entry)
+        return self.dbpool.runOperation(sql, params)
 
     def msg_log_entry(self, result):
-        if not result:
-            return "Kunne ikke oppdatere driftslogg, er db oppe?"
-        else:
-            return "Yes sir! Driftslogg oppdatert."
+        self.bot.msgToChannel("Yes sir! Driftslogg oppdatert.")
 
     def get_lastlog(self):
-        sql = "SELECT * FROM driftslogg ORDER BY time DESC LIMIT 3"
+        sql = "SELECT * FROM main_entry ORDER BY created DESC LIMIT 3"
         return self.dbpool.runQuery(sql)
 
     def msg_lastlog(self, log_entries):
         for i,entry in enumerate(log_entries, start=1):
-            self.bot.msgToChannel(str(i) +
-                                  ":" + entry[2] +
-                                  " (" + entry[1] + ", " +
-                                  str(time.ctime(entry[0])) + ")")
+            string_entry = str(i) + ": " + entry[2] + " (" + entry[1] + ", " + str(entry[3]) + ")"
+            self.bot.msgToChannel(string_entry.encode("utf-8"))
 
 
 def log(message):
