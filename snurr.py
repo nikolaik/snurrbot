@@ -1,9 +1,15 @@
+#!/usr/bin/env python
+# encoding: utf-8
 import optparse
+import subprocess 
 from datetime import datetime
 from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor, ssl
+from twisted.enterprise import adbapi
 
 class SnurrBot(irc.IRCClient):
+    def __init__(self):
+        self.actions = IRCActions(self)
 
     def _get_nickname(self):
         return self.factory.nickname
@@ -23,13 +29,16 @@ class SnurrBot(irc.IRCClient):
         log("Joined %s." % (channel,))
 
     def privmsg(self, user, channel, msg):
-        # Do nothing with PRIVMSG's
-        log("PRIVMSG: %s" % (msg,))
+        # Handle command strings.
+        if msg.startswith("!"):
+            self.actions.new(msg[1:], user, channel)
+        log("PRIVMSG: %s: %s" % (user,msg,))
     
     def msgToChannel(self, msg):
         # Sends a message to the predefined channel
         log("Message sent to %s" % (self.factory.channel,))
-        self.say(self.factory.channel, msg, length=512)
+        if len(msg) > 0:
+            self.say(self.factory.channel, msg, length=512)
 
 
 class SnurrBotFactory(protocol.ClientFactory):
@@ -68,15 +77,92 @@ class UDPListener(protocol.DatagramProtocol):
         if self.botfactory.bot:
             self.botfactory.bot.msgToChannel(data)
 
+class IRCActions():
+    def __init__(self, bot):
+        self.bot = bot
+        self.dbpool = self._get_dbpool()
+
+    def _get_dbpool(self):
+        # Setup an async db connection
+        # CONFIG:
+        return adbapi.ConnectionPool("MySQLdb",
+            host="snes.neuf.no", user="driftlogg",
+            passwd="", db="driftlogg")
+
+    def ping(self, host):
+        # TODO rewrite async
+        try:
+            command = "ping -W 1 -c 1 " + host
+            retcode = subprocess.call(command.split(),stdout=subprocess.PIPE)
+            if retcode == 0:
+                return host + " pinger fint den :P"
+            elif retcode == 2:
+                return host + " pinger ikke :("
+            else:
+               print retcode
+               return "ping returned: " + str(retcode)
+        except OSError, e:
+            log("Execution failed:" + str(e))
+            return "feil med ping:" + str(e)
+
+    def help(self):
+        text = ""
+        text += "Command: !help\n"
+        text += "   This help message\n"
+        text += "Command: !log DESCRIPTION\n"
+        text += "   Add new entry in log\n"
+        text += "Command: !lastlog\n"
+        text += "   Last log entry\n"
+        text += "Command: !ping HOST\n"
+        text += "   Ping target host"
+        return text
+
+    def new(self, msg, user, channel):
+        nick = user.split('!', 1)[0] # Strip out hostmask
+
+        # Process the commands
+        parts = msg.split()
+        if parts[0] == "ping" and len(parts) == 2:
+            self.bot.msgToChannel(self.ping(parts[1]))
+        elif parts[0] == "help" and len(parts) == 1:
+            self.bot.msgToChannel(self.help())
+        elif parts[0] == "log" and len(parts) == 2:
+            # set_log_entry should create a deferred and
+            # the callback should fire when the db returns.
+            self.set_log_entry(nick, msg).addCallback(self.msg_log_entry)
+        elif parts[0] == "lastlog" and len(parts) == 1:
+            # ...same as above
+            self.get_lastlog().addCallback(self.msg_lastlog)
+        else:
+            self.bot.msgToChannel("Need !help " + nick + "?")
+
+    def set_log_entry(self, nick, entry):
+        sql = """INSERT INTO driftslogg (time, user, log) 
+                 VALUES(NOW(), %s, %s)""", (nick, entry)
+        return self.dbpool.runQuery(sql)
+
+    def msg_log_entry(self, result):
+        if not result:
+            return "Kunne ikke oppdatere driftslogg, er db oppe?"
+        else:
+            return "Yes sir! Driftslogg oppdatert."
+
+    def get_lastlog(self):
+        sql = "SELECT * FROM driftslogg ORDER BY time DESC LIMIT 3"
+        return self.dbpool.runQuery(sql)
+
+    def msg_lastlog(self, log):
+        # FIXME : formatting
+        self.bot.msgToChannel(str(log))
+
+
 def log(message):
     now = datetime.now().strftime("%b %d %H:%M:%S")
     print "{0} {1}".format(now, message)
 
-
-if __name__ == "__main__":
-    usage = 'Usage: python snurr.py [options] CHANNEL'
+def setup_and_parse_options():
     parser = optparse.OptionParser(description='Pipes UDP-messages to an IRC-channel.',
-                                   usage=usage)
+                                   usage=usage())
     parser.add_option('-c', '--connect', metavar='SERVER',
                       help='IRC server (default: irc.ifi.uio.no)', default='irc.ifi.uio.no')
     parser.add_option('-p', '--port', metavar='PORT', type=int,
@@ -85,10 +171,16 @@ if __name__ == "__main__":
                       help='connect with SSL (default: False)', default=False)
     parser.add_option('-l', '--listen_port', metavar='LISTEN_PORT', type=int,
                       help='UDP listen port (default: 55666)', default=55666)
-    options, args = parser.parse_args()
+    return parser.parse_args()
+
+def usage():
+    return 'Usage: python snurr.py [-h] [options] CHANNEL'
+
+if __name__ == "__main__":
+    options, args = setup_and_parse_options()
 
     if len(args) != 1:
-        print usage
+        print usage()
         exit()
     snurr = SnurrBotFactory('#' + args[0])
     listener = UDPListener(snurr)

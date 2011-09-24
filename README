@@ -1,4 +1,5 @@
-Requirements: python-twisted
+Requirements:
+ - python-twisted
 
 $ python snurr.py -h
 Usage: python snurr.py [options] CHANNEL
