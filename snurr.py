@@ -2,7 +2,9 @@
 # encoding: utf-8
 import optparse
 import subprocess 
+import time
 from datetime import datetime
+
 from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor, ssl
 from twisted.enterprise import adbapi
@@ -151,9 +153,13 @@ class IRCActions():
         sql = "SELECT * FROM driftslogg ORDER BY time DESC LIMIT 3"
         return self.dbpool.runQuery(sql)
 
-    def msg_lastlog(self, log):
+    def msg_lastlog(self, log_entries):
         # FIXME : formatting
-        self.bot.msgToChannel(str(log))
+        for i,entry in enumerate(log_entries, start=1),log_entries:
+            self.bot.msgToChannel(str(i) +
+                                  ":" + entry[2] +
+                                  " (" + entry[1] + ", " +
+                                  str(time.ctime(entry[0])) + ")")
 
 
 def log(message):
