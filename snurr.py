@@ -154,7 +154,7 @@ class IRCActions():
         return self.dbpool.runQuery(sql)
 
     def msg_lastlog(self, log_entries):
-        for i,entry in enumerate(log_entries, start=1)
+        for i,entry in enumerate(log_entries, start=1):
             self.bot.msgToChannel(str(i) +
                                   ":" + entry[2] +
                                   " (" + entry[1] + ", " +
