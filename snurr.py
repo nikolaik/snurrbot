@@ -128,10 +128,10 @@ class IRCActions():
             self.bot.msgToChannel(self.ping(parts[1]))
         elif parts[0] == "help" and len(parts) == 1:
             self.bot.msgToChannel(self.help())
-        elif parts[0] == "log" and len(parts) == 2:
+        elif parts[0] == "log" and len(parts) >= 2:
             # set_log_entry should create a deferred and
             # the callback should fire when the db returns.
-            self.set_log_entry(nick, msg).addCallback(self.msg_log_entry)
+            self.set_log_entry(nick, parts[1:]).addCallback(self.msg_log_entry)
         elif parts[0] == "lastlog" and len(parts) == 1:
             # ...same as above
             self.get_lastlog().addCallback(self.msg_lastlog)
@@ -139,6 +139,7 @@ class IRCActions():
             self.bot.msgToChannel("Need !help " + nick + "?")
 
     def set_log_entry(self, nick, entry):
+        entry = " ".join(entry)
         sql = """INSERT INTO driftslogg (time, user, log) 
                  VALUES(NOW(), %s, %s)""", (nick, entry)
         return self.dbpool.runQuery(sql)
