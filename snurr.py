@@ -3,11 +3,13 @@
 import optparse
 import subprocess 
 import time
+import MySQLdb
 from datetime import datetime
 
 from twisted.words.protocols import irc
 from twisted.internet import protocol, reactor, ssl
 from twisted.enterprise import adbapi
+from twisted.python import log
 
 import settings
 
@@ -25,22 +27,22 @@ class SnurrBot(irc.IRCClient):
 
     def signedOn(self):
         self.join(self.factory.channel)
-        log("Signed on as %s." % (self.nickname,))
+        _log("Signed on as %s." % (self.nickname,))
         # make the client instance known to the factory
         self.factory.bot = self
 
     def joined(self, channel):
-        log("Joined %s." % (channel,))
+        _log("Joined %s." % (channel,))
 
     def privmsg(self, user, channel, msg):
         # Handle command strings.
         if msg.startswith("!"):
             self.actions.new(msg[1:], user, channel)
-        log("PRIVMSG: %s: %s" % (user,msg,))
+        _log("PRIVMSG: %s: %s" % (user,msg,))
     
     def msgToChannel(self, msg):
         # Sends a message to the predefined channel
-        log("Message sent to %s" % (self.factory.channel,))
+        _log("Message sent to %s" % (self.factory.channel,))
         if len(msg) > 0:
             self.say(self.factory.channel, msg, length=512)
 
@@ -56,11 +58,11 @@ class SnurrBotFactory(protocol.ClientFactory):
         return "SnurrBotFactory"
 
     def clientConnectionLost(self, connector, reason):
-        log("Lost connection (%s), reconnecting." % (reason,))
+        _log("Lost connection (%s), reconnecting." % (reason,))
         connector.connect()
 
     def clientConnectionFailed(self, connector, reason):
-        log("Could not connect: (%s), retrying." % (reason,))
+        _log("Could not connect: (%s), retrying." % (reason,))
 
 class UDPListener(protocol.DatagramProtocol):
 
@@ -68,16 +70,16 @@ class UDPListener(protocol.DatagramProtocol):
         self.botfactory = botfactory
 
     def startProtocol(self):
-        log("Listening for messages.")
+        _log("Listening for messages.")
 
     def stopProtocol(self):
-        log("Listener stopped")
+        _log("Listener stopped")
 
     def datagramReceived(self, data, (host, port)):
         # UDP messages (from MediaWiki f.ex) arrive here and are relayed
         # to the ircbot created by the bot factory.
-        log("Received %r from %s:%d" % (data, host, port))
-        log("Relaying msg to IRCClient in %s" % (self.botfactory,))
+        _log("Received %r from %s:%d" % (data, host, port))
+        _log("Relaying msg to IRCClient in %s" % (self.botfactory,))
         if self.botfactory.bot:
             self.botfactory.bot.msgToChannel(data)
 
@@ -88,7 +90,7 @@ class IRCActions():
 
     def _get_dbpool(self):
         # Setup an async db connection
-        return adbapi.ConnectionPool(settings.DB_API_ADAPTER,
+        return ReconnectingConnectionPool(settings.DB_API_ADAPTER,
             host=settings.DB_HOST, user=settings.DB_USER,
             passwd=settings.DB_PASSWORD, db=settings.DB_NAME,
             charset = "utf8", use_unicode = True)
@@ -105,7 +107,7 @@ class IRCActions():
             else:
                return "ping returned: " + str(retcode)
         except OSError, e:
-            log("Execution failed:" + str(e))
+            _log("Execution failed:" + str(e))
             return "feil med ping:" + str(e)
 
     def help(self):
@@ -157,14 +159,37 @@ class IRCActions():
             string_entry = str(i) + ": " + entry[2] + " (" + entry[1] + ", " + str(entry[3]) + ")"
             self.bot.msgToChannel(string_entry.encode("utf-8"))
 
+class ReconnectingConnectionPool(adbapi.ConnectionPool):
+    """Reconnecting adbapi connection pool for MySQL.
 
-def log(message):
+    This class improves on the solution posted at
+    http://www.gelens.org/2008/09/12/reinitializing-twisted-connectionpool/
+    by checking exceptions by error code and only disconnecting the current
+    connection instead of all of them.
+
+    Also see:
+    http://twistedmatrix.com/pipermail/twisted-python/2009-July/020007.html
+
+    """
+    def _runInteraction(self, interaction, *args, **kw):
+        try:
+            return adbapi.ConnectionPool._runInteraction(self, interaction, *args, **kw)
+        except MySQLdb.OperationalError, e:
+            if e[0] not in (2006, 2013):
+                raise
+            log.msg("RCP: got error %s, retrying operation" %(e))
+            conn = self.connections.get(self.threadID())
+            self.disconnect(conn)
+            # try the interaction again
+            return adbapi.ConnectionPool._runInteraction(self, interaction, *args, **kw)
+
+def _log(message):
     now = datetime.now().strftime("%b %d %H:%M:%S")
     print "{0} {1}".format(now, message)
 
-def setup_and_parse_options():
+def _setup_and_parse_options():
     parser = optparse.OptionParser(description='Pipes UDP-messages to an IRC-channel.',
-                                   usage=usage())
+                                   usage=_usage())
     parser.add_option('-c', '--connect', metavar='SERVER',
                       help='IRC server (default: irc.ifi.uio.no)', default='irc.ifi.uio.no')
     parser.add_option('-p', '--port', metavar='PORT', type=int,
@@ -175,14 +200,14 @@ def setup_and_parse_options():
                       help='UDP listen port (default: 55666)', default=55666)
     return parser.parse_args()
 
-def usage():
+def _usage():
     return 'Usage: python snurr.py [-h] [options] CHANNEL'
 
 if __name__ == "__main__":
-    options, args = setup_and_parse_options()
+    options, args = _setup_and_parse_options()
 
     if len(args) != 1:
-        print usage()
+        print _usage()
         exit()
     snurr = SnurrBotFactory('#' + args[0])
     listener = UDPListener(snurr)
