@@ -93,7 +93,8 @@ class IRCActions():
         return ReconnectingConnectionPool(settings.DB_API_ADAPTER,
             host=settings.DB_HOST, user=settings.DB_USER,
             passwd=settings.DB_PASSWORD, db=settings.DB_NAME,
-            charset = "utf8", use_unicode = True)
+            charset="utf8", use_unicode=True,
+            cp_reconnect=True)
 
     def ping(self, host):
         # TODO rewrite async
