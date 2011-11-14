@@ -34,12 +34,24 @@ class SnurrBot(irc.IRCClient):
     def joined(self, channel):
         _log("Joined %s." % (channel,))
 
+    # Called when I have a message from a user to me or a channel.
     def privmsg(self, user, channel, msg):
         # Handle command strings.
         if msg.startswith("!"):
             self.actions.new(msg[1:], user, channel)
         _log("PRIVMSG: %s: %s" % (user,msg,))
     
+    def msgReply(self, user, to, msg):
+        if len(msg) > 0:
+            print "to:",to,"me:",self.nickname
+            if to == self.nickname:
+                print user,msg
+                _log("Message sent to %s" % (user,)
+                r = self.msg(user, msg, length=512)
+                print r
+            else:
+                self.msgToChannel(msg)
+
     def msgToChannel(self, msg):
         # Sends a message to the predefined channel
         _log("Message sent to %s" % (self.factory.channel,))
@@ -128,19 +140,23 @@ class IRCActions():
 
         # Process the commands
         parts = msg.split()
+        if not parts:
+            self.bot.msgReply(nick, channel, "Need !help " + nick + "?")
+            return
+
         if parts[0] == "ping" and len(parts) == 2:
-            self.bot.msgToChannel(self.ping(parts[1]))
+            self.bot.msgReply(nick, channel, self.ping(parts[1]))
         elif parts[0] == "help" and len(parts) == 1:
-            self.bot.msgToChannel(self.help())
+            self.bot.msgReply(nick, channel, self.help())
         elif parts[0] == "log" and len(parts) >= 2:
             # set_log_entry should create a deferred and
             # the callback should fire when the db returns.
-            self.set_log_entry(nick, parts[1:]).addCallback(self.msg_log_entry)
+            self.set_log_entry(nick, parts[1:]).addCallback(self.msg_log_entry, channel, nick)
         elif parts[0] == "lastlog" and len(parts) == 1:
             # ...same as above
-            self.get_lastlog().addCallback(self.msg_lastlog)
+            self.get_lastlog().addCallback(self.msg_lastlog, channel, nick)
         else:
-            self.bot.msgToChannel("Need !help " + nick + "?")
+            self.bot.msgReply(nick, channel, "Need !help " + nick + "?")
 
     def set_log_entry(self, nick, entry):
         entry = " ".join(entry)
@@ -148,17 +164,17 @@ class IRCActions():
         params = (nick, entry)
         return self.dbpool.runOperation(sql, params)
 
-    def msg_log_entry(self, result):
-        self.bot.msgToChannel("Yes sir! Driftslogg oppdatert.")
+    def msg_log_entry(self, result, channel, nick):
+        self.bot.msgReply(nick, channel, "Yes sir! Driftslogg oppdatert.")
 
     def get_lastlog(self):
         sql = "SELECT * FROM main_entry ORDER BY created DESC LIMIT 3"
         return self.dbpool.runQuery(sql)
 
-    def msg_lastlog(self, log_entries):
+    def msg_lastlog(self, log_entries, channel, nick):
         for i,entry in enumerate(log_entries, start=1):
             string_entry = str(i) + ": " + entry[2] + " (" + entry[1] + ", " + str(entry[3]) + ")"
-            self.bot.msgToChannel(string_entry.encode("utf-8"))
+            self.bot.msgReply(nick, channel, string_entry.encode("utf-8"))
 
 class ReconnectingConnectionPool(adbapi.ConnectionPool):
     """Reconnecting adbapi connection pool for MySQL.
