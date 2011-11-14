@@ -44,7 +44,7 @@ class SnurrBot(irc.IRCClient):
     def msgReply(self, user, to, msg):
         if len(msg) > 0:
             if to == self.nickname:
-                _log("Message sent to %s" % (user,)
+                _log("Message sent to %s" % (user,))
                 self.msg(user, msg, length=512)
             else:
                 self.msgToChannel(msg)
