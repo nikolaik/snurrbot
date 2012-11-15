@@ -100,12 +100,21 @@ class IRCActions():
         self.bot = bot
         if not settings.DISABLE_LOG:
             self.dbpool = self._get_dbpool()
+            self.tetris_dbpool = self._get_tetris_dbpool()
 
     def _get_dbpool(self):
         # Setup an async db connection
         return ReconnectingConnectionPool(settings.DB_API_ADAPTER,
             host=settings.DB_HOST, user=settings.DB_USER,
             passwd=settings.DB_PASSWORD, db=settings.DB_NAME,
+            charset="utf8", use_unicode=True,
+            cp_reconnect=True)
+
+    def _get_tetris_dbpool(self):
+        # Setup an async db connection
+        return ReconnectingConnectionPool(settings.DB_API_ADAPTER,
+            host=settings.TETRIS_DB_HOST, user=settings.TETRIS_DB_USER,
+            passwd=settings.TETRIS_DB_PASSWORD, db=settings.TETRIS_DB_NAME,
             charset="utf8", use_unicode=True,
             cp_reconnect=True)
 
@@ -157,6 +166,9 @@ class IRCActions():
         elif parts[0] == "lastlog" and len(parts) == 1 and not settings.DISABLE_LOG:
             # ...same as above
             self.get_lastlog().addCallback(self.msg_lastlog, channel, nick)
+        elif parts[0] == "tetrishigh" and len(parts) == 1 and not settings.DISABLE_TETRIS:
+            self.get_tetris_highscore().addCallback(self.msg_tetris_highscore, channel, nick)
+
         else:
             self.bot.msgReply(nick, channel, "Need !help " + nick + "?")
 
@@ -177,6 +189,15 @@ class IRCActions():
         for i,entry in enumerate(log_entries, start=1):
             string_entry = str(i) + ": " + entry[2] + " (" + entry[1] + ", " + str(entry[3]) + ")"
             self.bot.msgReply(nick, channel, string_entry.encode("utf-8"))
+
+    def get_tetris_highscore(self):
+        sql = "SELECT * FROM highscore ORDER BY score DESC LIMIT 1"
+        return self.tetris_dbpool.runQuery(sql)
+
+    def msg_tetris_highscore(self, highscore, channel, nick):
+        h_id,score,name,time,ip,country = highscore[0]
+        string_highscore = "Tetris AI highscore: " + str(score) + " by " + name + "."
+        self.bot.msgReply(nick, channel, string_highscore.encode("utf-8"))
 
 class ReconnectingConnectionPool(adbapi.ConnectionPool):
     """Reconnecting adbapi connection pool for MySQL.
