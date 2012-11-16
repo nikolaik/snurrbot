@@ -191,13 +191,14 @@ class IRCActions():
             self.bot.msgReply(nick, channel, string_entry.encode("utf-8"))
 
     def get_tetris_highscore(self):
-        sql = "SELECT * FROM highscore ORDER BY score DESC LIMIT 1"
+        sql = "SELECT MAX(score) AS highscore, name FROM highscore GROUP BY name ORDER BY highscore DESC LIMIT 3"
         return self.tetris_dbpool.runQuery(sql)
 
-    def msg_tetris_highscore(self, highscore, channel, nick):
-        h_id,score,name,time,ip,country = highscore[0]
-        string_highscore = "Tetris AI highscore: " + str(score) + " by " + name + "."
-        self.bot.msgReply(nick, channel, string_highscore.encode("utf-8"))
+    def msg_tetris_highscore(self, highscores, channel, nick):
+        for highscore in highscores:
+            high,name = highscore
+            string_highscore = "Highscore: " + str(score) + " by " + name + "."
+            self.bot.msgReply(nick, channel, string_highscore.encode("utf-8"))
 
 class ReconnectingConnectionPool(adbapi.ConnectionPool):
     """Reconnecting adbapi connection pool for MySQL.
