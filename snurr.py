@@ -197,7 +197,7 @@ class IRCActions():
     def msg_tetris_highscore(self, highscores, channel, nick):
         for highscore in highscores:
             high,name = highscore
-            string_highscore = "Highscore: " + str(score) + " by " + name + "."
+            string_highscore = "Highscore: " + str(high) + " by " + name + "."
             self.bot.msgReply(nick, channel, string_highscore.encode("utf-8"))
 
 class ReconnectingConnectionPool(adbapi.ConnectionPool):
